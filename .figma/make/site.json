@@ -1,0 +1,10 @@
+{
+  "description": "Uploads and analyzes files to create accurate replicas, enabling users to quickly duplicate content for efficient project workflows.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

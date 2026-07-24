@@ -1,0 +1,119 @@
+Design a premium luxury e-commerce website UI in Figma for "GENZO SILVER", 
+a Pakistani jewellery brand selling silver rings, bracelets, chains, necklaces, 
+pendants, earrings, and watches.
+
+DESIGN STYLE: Premium, elegant, minimal luxury with a LIGHT theme. Clean, airy, 
+soft layout with generous white space — similar to high-end jewellery brands 
+like Pandora or Mejuri, but with a warm Pakistani luxury touch.
+
+COLOR PALETTE (Light background based):
+- Primary background: Ivory / off-white (#FAF6EF)
+- Secondary background: Soft beige (#F3ECDF)
+- Card background: White (#FFFFFF) with subtle border (#E5DCC8)
+- Accent color: Gold (#C9A44C) — used for buttons, icons, borders, highlights
+- Dark accent (for header/footer/contrast text): Charcoal black (#1A1A1A)
+- Text primary: Charcoal (#2B2B2B)
+- Text secondary/muted: Warm grey (#8A8377)
+- Success/status green: #4C8B5A (for delivered/paid status)
+- Error/status red: #B34A4A (for cancelled status)
+
+TYPOGRAPHY:
+- Headings: Elegant serif font (e.g. Playfair Display or Cormorant) — luxury feel
+- Body text: Clean modern sans-serif (e.g. Inter or Poppins)
+- Font sizes: H1 40px, H2 28px, H3 20px, Body 16px, Small 13px
+
+DESIGN SYSTEM / COMPONENTS TO CREATE FIRST:
+- Buttons: Primary (gold bg, black text), Secondary (outline gold, transparent bg)
+- Input fields: Rounded 8px, light border, focus state gold border
+- Product card component (image, title, price, wishlist icon, quick add button)
+- Status badges (Pending, Processing, Shipped, Delivered, Cancelled)
+- Navbar (logo left, menu center, cart/account/search icons right)
+- Footer component
+
+PAGES/FRAMES TO DESIGN (Desktop 1440px + Mobile 375px versions):
+
+1. HOME PAGE
+   - Sticky navbar: Logo, Menu (Home, Shop, About, Contact, Blog), Search icon, 
+     Wishlist icon, Cart icon, Account icon
+   - Hero section: full-width banner image of jewellery on model, ivory background, 
+     bold serif headline, gold CTA button "Shop Now"
+   - "Shop by Category" — circular/rounded image cards: Rings, Bracelets, Chains, 
+     Necklaces, Pendants, Earrings, Watches, Gift Boxes
+   - Featured Collections — 3 large image cards
+   - Best Sellers — horizontal scroll product carousel
+   - New Arrivals — product grid (4 columns desktop, 2 mobile)
+   - "Why Choose Us" — 4 icon boxes: Authentic Silver, Secure Payment, 
+     Fast Delivery, Cash on Delivery
+   - Customer Reviews — testimonial cards with star ratings
+   - Instagram feed — 6 image grid
+   - Newsletter signup — beige background band, email input + gold button
+   - Footer — 4 columns (About, Quick Links, Customer Service, Payment icons: 
+     COD, JazzCash, EasyPaisa, Bank Transfer), social icons, copyright
+
+2. SHOP / PRODUCT LISTING PAGE
+   - Breadcrumb (Home / Shop / Category)
+   - Left sidebar filters: Category checkboxes, Price range slider, Material, 
+     Color swatches, Size, Availability toggle
+   - Top bar: Result count, Sort dropdown (Featured, Best Selling, Newest, 
+     Price Low-High, Price High-Low)
+   - Product grid (4 columns), hover shows "Quick Add to Cart" + wishlist heart icon
+   - Pagination at bottom (numbered + next/prev)
+
+3. PRODUCT DETAIL PAGE
+   - Left: Image gallery with thumbnail strip, main image zoom on hover
+   - Right: Product title (serif), price + compare-at price (strikethrough), 
+     star rating + review count, short description
+   - Size/variant selector — gold outlined pill buttons
+   - Quantity stepper + "Add to Cart" (gold filled) + "Add to Wishlist" (outline) 
+     buttons
+   - Delivery estimate + trust badges row
+   - Tabs below: Description, Specifications, Reviews
+   - "Frequently Bought Together" section
+   - "You May Also Like" product carousel
+
+4. CART PAGE
+   - Cart item rows: image, name, size, price, quantity stepper, remove icon
+   - Coupon code input with "Apply" button
+   - Order summary card (sticky on desktop): Subtotal, Shipping, Discount, Total
+   - "Proceed to Checkout" gold button
+   - "Continue Shopping" text link
+
+5. CHECKOUT PAGE
+   - Step indicator: Shipping → Payment → Review
+   - Guest checkout toggle
+   - Shipping/Billing form (clean input fields, light borders)
+   - Payment method selection: radio cards for COD, Bank Transfer, JazzCash, 
+     EasyPaisa (each with logo icon)
+   - Order summary sidebar with product thumbnails
+   - "Place Order" gold button
+
+6. ORDER SUCCESS PAGE
+   - Centered checkmark icon (gold circle), "Order Confirmed" message
+   - Order number, estimated delivery date
+   - "Track Order" and "Continue Shopping" buttons
+
+7. USER ACCOUNT DASHBOARD
+   - Left sidebar: Dashboard, Orders, Wishlist, Saved Addresses, Profile, 
+     Change Password, Logout
+   - Main area: Orders table with status badges, order date, total, view button
+
+8. ABOUT US PAGE
+   - Brand story section with image + text
+   - Mission/Vision cards
+   - Craftsmanship section with process images
+
+9. CONTACT PAGE
+   - Contact form (Name, Email, Message)
+   - WhatsApp, Email, Phone contact cards
+   - Google Maps embed placeholder
+
+UI DETAILS:
+- Border radius: 8px on buttons/inputs, 12px on cards, 50% on avatar/category icons
+- Shadows: very subtle soft shadows (no heavy drop shadows)
+- Spacing: generous padding (24px-40px sections), airy layout
+- Icons: thin-line minimal style
+- All components must have hover and active states
+- Fully responsive: Desktop (1440px), Tablet (768px), Mobile (375px)
+
+MOOD: Light, elegant, trustworthy, premium — feels expensive but approachable, 
+optimized for Pakistani mobile shoppers.
