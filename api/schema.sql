@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS user_addresses (
 CREATE TABLE IF NOT EXISTS wishlists (
   user_id VARCHAR(80) NOT NULL,
   product_id INT NOT NULL,
+  product_name VARCHAR(255),
+  image_url TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, product_id),
   CONSTRAINT fk_wishlists_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE

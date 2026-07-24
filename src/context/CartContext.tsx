@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { CartItem } from '../types';
 import { useAuth } from './AuthContext';
+import { products } from '../data/products';
 
 export interface OrderSnapshot {
   orderNumber: string;
@@ -108,10 +109,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const removing = wishlistIds.includes(id);
     setWishlistIds(prev => removing ? prev.filter(i => i !== id) : [...prev, id]);
     if (user?.token) {
+      const product = products.find(item => item.id === id);
       fetch('/api/account/wishlist', {
         method: removing ? 'DELETE' : 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-        body: JSON.stringify({ productId: id }),
+        body: JSON.stringify({ productId: id, productName: product?.name, image: product?.image }),
       }).then(async response => {
         if (!response.ok) throw new Error('Wishlist request failed');
         return response.json();
