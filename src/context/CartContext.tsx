@@ -68,6 +68,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
       });
   }, [user?.token, user?.userId]);
 
+  useEffect(() => {
+    if (!user?.token) return;
+    fetch('/api/account/wishlist', { headers: { Authorization: `Bearer ${user.token}` } })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (data?.productIds) setWishlistIds(data.productIds); })
+      .catch(() => undefined);
+  }, [user?.token]);
+
   const addToCart = (item: Omit<CartItem, 'cartId' | 'quantity'>) => {
     const cartId = `${item.productId}_${item.size}`;
     setCartItems(prev => {
@@ -97,9 +105,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const cartTotal = cartItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   const toggleWishlist = (id: number) => {
-    setWishlistIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+    const removing = wishlistIds.includes(id);
+    setWishlistIds(prev => removing ? prev.filter(i => i !== id) : [...prev, id]);
+    if (user?.token) {
+      fetch('/api/account/wishlist', {
+        method: removing ? 'DELETE' : 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({ productId: id }),
+      }).then(async response => {
+        if (!response.ok) throw new Error('Wishlist request failed');
+        return response.json();
+      }).then(data => { if (data.productIds) setWishlistIds(data.productIds); })
+        .catch(() => setWishlistIds(prev => removing ? [...prev, id] : prev.filter(i => i !== id)));
+    }
   };
 
   const setLastOrder = (order: OrderSnapshot) => setLastOrderState(order);

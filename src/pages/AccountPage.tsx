@@ -1,8 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { useNav } from '../context/NavContext';
 import { products } from '../data/products';
 import ProductCard from '../components/ProductCard';
+import { useAuth } from '../context/AuthContext';
+
+type Address = {
+  id: number; recipientName: string; phone: string | null; address: string;
+  city: string; province: string; postalCode: string | null; isDefault: boolean;
+};
 
 const statusStyles: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700 border border-yellow-300',
@@ -24,9 +30,54 @@ type Section = 'orders' | 'wishlist' | 'addresses' | 'profile' | 'password';
 
 export default function AccountPage() {
   const { wishlistIds, placedOrders } = useCart();
+  const { user, logout } = useAuth();
   const { navigate } = useNav();
   const [section, setSection] = useState<Section>('orders');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [profile, setProfile] = useState({ firstName: '', lastName: '', phone: '', email: '' });
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [addressForm, setAddressForm] = useState({ recipientName: '', phone: '', address: '', city: '', province: '', postalCode: '' });
+  const [editingAddress, setEditingAddress] = useState<number | null>(null);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [message, setMessage] = useState<string | null>(null);
+
+  const request = async (path: string, options: RequestInit = {}) => {
+    const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token}`, ...(options.headers || {}) } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  };
+
+  useEffect(() => {
+    if (!user?.token) return;
+    request('/api/account/profile').then(data => {
+      const parts = (data.profile.name || '').split(' ');
+      setProfile({ firstName: parts.shift() || '', lastName: parts.join(' '), phone: data.profile.phone || '', email: data.profile.email || '' });
+    }).catch(error => setMessage(error.message));
+    request('/api/account/addresses').then(data => setAddresses(data.addresses || [])).catch(error => setMessage(error.message));
+  }, [user?.token]);
+
+  const saveProfile = async () => {
+    try { await request('/api/account/profile', { method: 'PATCH', body: JSON.stringify(profile) }); setMessage('Profile saved.'); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save profile'); }
+  };
+
+  const saveAddress = async () => {
+    try {
+      const data = await request('/api/account/addresses' + (editingAddress ? `?id=${editingAddress}` : ''), { method: editingAddress ? 'PATCH' : 'POST', body: JSON.stringify({ ...addressForm, isDefault: addresses.length === 0 }) });
+      if (editingAddress) setAddresses(prev => prev.map(item => item.id === editingAddress ? { ...item, ...addressForm } : item));
+      else setAddresses(prev => [...prev, { ...addressForm, id: data.id, isDefault: addresses.length === 0 }]);
+      setAddressForm({ recipientName: '', phone: '', address: '', city: '', province: '', postalCode: '' }); setEditingAddress(null); setMessage('Address saved.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save address'); }
+  };
+
+  const deleteAddress = async (id: number) => { try { await request(`/api/account/addresses?id=${id}`, { method: 'DELETE' }); setAddresses(prev => prev.filter(item => item.id !== id)); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete address'); } };
+
+  const changePassword = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) { setMessage('New passwords do not match.'); return; }
+    try { await request('/api/account/password', { method: 'POST', body: JSON.stringify(passwordForm) }); setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' }); setMessage('Password updated. Please log in again.'); }
+    catch (error) { setMessage(error instanceof Error ? error.message : 'Could not update password'); }
+  };
 
   const wishlistProducts = products.filter(p => wishlistIds.includes(p.id));
 
@@ -56,8 +107,8 @@ export default function AccountPage() {
                 <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center mb-2">
                   <span className="font-serif text-gold text-lg font-bold">A</span>
                 </div>
-                <p className="font-sans font-semibold text-sm text-charcoal">Ayesha Khan</p>
-                <p className="font-sans text-xs text-text-muted">ayesha@email.com</p>
+                <p className="font-sans font-semibold text-sm text-charcoal">{user?.name}</p>
+                <p className="font-sans text-xs text-text-muted">{user?.email || 'Guest account'}</p>
               </div>
               <nav className="py-2">
                 {sidebarLinks.map(link => (
@@ -75,7 +126,7 @@ export default function AccountPage() {
                 ))}
                 <div className="border-t border-warm-border mt-2 pt-2">
                   <button
-                    onClick={() => navigate('home')}
+                    onClick={() => { logout(); navigate('home'); }}
                     className="w-full text-left px-5 py-2.5 text-sm font-sans text-danger hover:bg-red-50 transition-colors"
                   >
                     Logout
@@ -104,6 +155,7 @@ export default function AccountPage() {
 
           {/* Main content */}
           <div className="flex-1 min-w-0">
+            {message && <div className="mb-5 rounded-lg bg-gold/10 border border-gold/30 px-4 py-3 text-sm text-charcoal">{message}</div>}
             {/* Orders Section */}
             {section === 'orders' && (
               <div>
@@ -275,23 +327,17 @@ export default function AccountPage() {
               <div>
                 <h2 className="font-serif text-2xl text-charcoal mb-5">Saved Addresses</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-xl border-2 border-gold p-5 relative">
-                    <span className="absolute top-3 right-3 text-[10px] font-sans font-bold text-gold tracking-widest">DEFAULT</span>
-                    <p className="font-sans font-semibold text-sm text-charcoal mb-1">Ayesha Khan</p>
-                    <p className="font-sans text-xs text-text-muted leading-relaxed">
-                      House 5, Block A, DHA Phase 5<br />
-                      Pakistan, Punjab 54000<br />
-                      +92 300 1234567
-                    </p>
-                    <div className="flex gap-3 mt-4">
-                      <button className="text-xs font-sans text-gold border-b border-gold pb-0.5">Edit</button>
-                      <button className="text-xs font-sans text-text-muted border-b border-text-muted pb-0.5">Delete</button>
-                    </div>
+                  {addresses.map(address => <div key={address.id} className="bg-white rounded-xl border-2 border-gold p-5 relative">
+                    {address.isDefault && <span className="absolute top-3 right-3 text-[10px] font-sans font-bold text-gold tracking-widest">DEFAULT</span>}
+                    <p className="font-sans font-semibold text-sm text-charcoal mb-1">{address.recipientName}</p>
+                    <p className="font-sans text-xs text-text-muted leading-relaxed">{address.address}<br />{address.city}, {address.province} {address.postalCode}<br />{address.phone}</p>
+                    <div className="flex gap-3 mt-4"><button onClick={() => { setEditingAddress(address.id); setAddressForm({ recipientName: address.recipientName, phone: address.phone || '', address: address.address, city: address.city, province: address.province, postalCode: address.postalCode || '' }); }} className="text-xs font-sans text-gold border-b border-gold pb-0.5">Edit</button><button onClick={() => deleteAddress(address.id)} className="text-xs font-sans text-text-muted border-b border-text-muted pb-0.5">Delete</button></div>
+                  </div>)}
+                  <div className="bg-white rounded-xl border border-warm-border p-4 space-y-3">
+                    <p className="font-sans font-semibold text-sm">{editingAddress ? 'Edit Address' : 'Add New Address'}</p>
+                    {Object.entries(addressForm).map(([name, value]) => <input key={name} name={name} value={value} onChange={event => setAddressForm(prev => ({ ...prev, [name]: event.target.value }))} placeholder={name.replace(/([A-Z])/g, ' $1')} className="w-full px-3 py-2 border border-warm-border rounded-lg text-sm bg-ivory" />)}
+                    <div className="flex gap-3"><button onClick={saveAddress} className="px-4 py-2 bg-gold rounded-lg text-sm font-semibold">Save Address</button>{editingAddress && <button onClick={() => setEditingAddress(null)} className="text-sm">Cancel</button>}</div>
                   </div>
-                  <button className="h-36 rounded-xl border-2 border-dashed border-warm-border text-text-muted hover:border-gold hover:text-gold transition-colors flex flex-col items-center justify-center gap-2 text-sm font-sans">
-                    <span className="text-2xl">+</span>
-                    Add New Address
-                  </button>
                 </div>
               </div>
             )}
@@ -303,10 +349,8 @@ export default function AccountPage() {
                 <div className="bg-white rounded-xl border border-warm-border p-6 max-w-lg">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {[
-                      { label: 'First Name', value: 'Ayesha' },
-                      { label: 'Last Name', value: 'Khan' },
-                      { label: 'Email', value: 'ayesha@email.com' },
-                      { label: 'Phone', value: '0300 1234567' },
+                      { label: 'First Name', name: 'firstName' }, { label: 'Last Name', name: 'lastName' },
+                      { label: 'Email', name: 'email' }, { label: 'Phone', name: 'phone' },
                     ].map(field => (
                       <div key={field.label}>
                         <label className="block text-xs font-sans font-medium text-text-muted mb-1.5 uppercase tracking-wide">
@@ -314,13 +358,16 @@ export default function AccountPage() {
                         </label>
                         <input
                           type="text"
-                          defaultValue={field.value}
+                          name={field.name}
+                          value={profile[field.name as keyof typeof profile]}
+                          onChange={event => setProfile(prev => ({ ...prev, [field.name]: event.target.value }))}
+                          disabled={field.name === 'email'}
                           className="w-full px-4 py-2.5 border border-warm-border rounded-lg text-sm font-sans bg-ivory text-text-base"
                         />
                       </div>
                     ))}
                   </div>
-                  <button className="mt-5 px-6 py-2.5 bg-gold text-charcoal font-sans font-semibold text-sm rounded-lg hover:bg-gold-dark transition-colors">
+                  <button onClick={saveProfile} className="mt-5 px-6 py-2.5 bg-gold text-charcoal font-sans font-semibold text-sm rounded-lg hover:bg-gold-dark transition-colors">
                     Save Changes
                   </button>
                 </div>
@@ -333,18 +380,18 @@ export default function AccountPage() {
                 <h2 className="font-serif text-2xl text-charcoal mb-5">Change Password</h2>
                 <div className="bg-white rounded-xl border border-warm-border p-6 max-w-md">
                   <div className="space-y-4">
-                    {['Current Password', 'New Password', 'Confirm New Password'].map(label => (
+                    {[['Current Password', 'currentPassword'], ['New Password', 'newPassword'], ['Confirm New Password', 'confirmPassword']].map(([label, name]) => (
                       <div key={label}>
                         <label className="block text-xs font-sans font-medium text-text-muted mb-1.5 uppercase tracking-wide">
                           {label}
                         </label>
                         <input
-                          type="password"
+                          type="password" value={passwordForm[name as keyof typeof passwordForm]} onChange={event => setPasswordForm(prev => ({ ...prev, [name]: event.target.value }))}
                           className="w-full px-4 py-2.5 border border-warm-border rounded-lg text-sm font-sans bg-ivory text-text-base"
                         />
                       </div>
                     ))}
-                    <button className="w-full py-2.5 bg-gold text-charcoal font-sans font-semibold text-sm rounded-lg hover:bg-gold-dark transition-colors mt-2">
+                    <button onClick={changePassword} className="w-full py-2.5 bg-gold text-charcoal font-sans font-semibold text-sm rounded-lg hover:bg-gold-dark transition-colors mt-2">
                       Update Password
                     </button>
                   </div>
