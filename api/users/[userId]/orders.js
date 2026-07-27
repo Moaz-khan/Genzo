@@ -35,16 +35,30 @@ export default async function handler(req, res) {
       [userId]
     );
 
-    // Get all items for these orders
-    const result = [];
-    for (const order of orders) {
-      const items = await query(
-        `SELECT product_id, product_name, image_url, size, price, quantity
-         FROM order_items WHERE order_number = ?`,
-        [order.order_number]
-      );
+    if (!orders.length) {
+      return res.status(200).json({ success: true, orders: [] });
+    }
 
-      result.push({
+    // Batch-fetch all items for all orders in one query
+    const orderNumbers = orders.map(o => o.order_number);
+    const placeholders = orderNumbers.map(() => '?').join(',');
+    const allItems = await query(
+      `SELECT order_number, product_id, product_name, image_url, size, price, quantity
+       FROM order_items WHERE order_number IN (${placeholders})`,
+      orderNumbers
+    );
+
+    // Group items by order_number
+    const itemsByOrder = {};
+    for (const item of allItems) {
+      const key = item.order_number;
+      if (!itemsByOrder[key]) itemsByOrder[key] = [];
+      itemsByOrder[key].push(item);
+    }
+
+    const result = orders.map(order => {
+      const items = itemsByOrder[order.order_number] || [];
+      return {
         orderNumber: order.order_number,
         status: order.status,
         total: parseFloat(order.total_amount),
@@ -62,8 +76,8 @@ export default async function handler(req, res) {
           quantity: item.quantity,
           cartId: `${item.product_id}_${item.size}`,
         })),
-      });
-    }
+      };
+    });
 
     return res.status(200).json({ success: true, orders: result });
 

@@ -25,6 +25,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
 
+    // Ensure the password_reset_tokens table exists (fresh database edge case)
+    await query(
+      `CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        email VARCHAR(255) NOT NULL,
+        otp VARCHAR(6) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (email, otp)
+      )`
+    );
+
     // Verify OTP
     const tokens = await query(
       `SELECT otp, expires_at FROM password_reset_tokens

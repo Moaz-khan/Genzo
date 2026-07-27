@@ -71,13 +71,13 @@ export default async function handler(req, res) {
       ]
     );
 
-    // Insert order items
-    for (const item of items) {
-      await query(
-        `INSERT INTO order_items
-           (order_number, product_id, product_name, image_url, size, price, quantity)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
+    // Insert order items (batch insert for performance)
+    if (items.length > 0) {
+      const values = [];
+      const batchParams = [];
+      for (const item of items) {
+        values.push('(?, ?, ?, ?, ?, ?, ?)');
+        batchParams.push(
           orderNumber,
           item.productId,
           item.name,
@@ -85,7 +85,13 @@ export default async function handler(req, res) {
           item.size || 'One Size',
           item.price,
           item.quantity,
-        ]
+        );
+      }
+      await query(
+        `INSERT INTO order_items
+           (order_number, product_id, product_name, image_url, size, price, quantity)
+         VALUES ${values.join(', ')}`,
+        batchParams
       );
     }
 

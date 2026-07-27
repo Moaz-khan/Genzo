@@ -22,7 +22,12 @@ export default async function handler(req, res) {
     if (!dataUrl || !/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(dataUrl)) return res.status(400).json({ error: 'A PNG, JPG, or WEBP image is required' });
     const base64 = dataUrl.split(',')[1] || '';
     const fileSize = Math.ceil((base64.length * 3) / 4);
-    if (fileSize > 3 * 1024 * 1024) return res.status(413).json({ error: 'Payment proof must be smaller than 3MB' });
+    // Keep well under Vercel's 4.5MB request body limit (base64 overhead ~33%)
+    if (fileSize > 2 * 1024 * 1024) return res.status(413).json({ error: 'Payment proof must be smaller than 2MB' });
+
+    // Early content-length check when available
+    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+    if (contentLength > 4_000_000) return res.status(413).json({ error: 'Request body too large' });
 
     await query(
       `INSERT INTO payment_proofs (order_number, user_id, customer_name, customer_email, customer_phone, shipping_address, city, province, postal_code, file_name, mime_type, file_size, image_data, status)
