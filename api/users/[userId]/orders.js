@@ -1,10 +1,10 @@
-// api/orders/[userId].js
-// GET /api/orders/:userId
+// api/users/[userId]/orders.js
+// GET /api/users/:userId/orders
 // Headers: Authorization: Bearer <token>
 // Returns all orders for a user with their items
 
-import { query } from '../_db.js';
-import { requireUser, setCors } from '../_auth.js';
+import { query } from '../../_db.js';
+import { requireUser, setCors } from '../../_auth.js';
 
 
 export default async function handler(req, res) {

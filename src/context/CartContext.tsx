@@ -62,7 +62,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       .then(response => response.ok ? response.json() : null)
       .then(data => { if (data?.items) setCartItems(data.items); })
       .catch(() => undefined);
-    fetch(`/api/orders/${encodeURIComponent(user.userId)}`, {
+    fetch(`/api/users/${encodeURIComponent(user.userId)}/orders`, {
       headers: { Authorization: `Bearer ${user.token}` },
     })
       .then(async response => {
