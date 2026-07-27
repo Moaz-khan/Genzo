@@ -5,8 +5,6 @@ interface NavContextType {
   page: Page;
   navigate: (page: Page, productId?: number) => void;
   selectedProductId: number | null;
-  isLoggedIn: boolean;
-  setIsLoggedIn: (value: boolean) => void;
   shopCategory: string | null;
   shopSubCategory: string | null;
   setShopFilter: (category: string | null, subCategory?: string | null) => void;
@@ -17,7 +15,6 @@ const NavContext = createContext<NavContextType | null>(null);
 export function NavProvider({ children }: { children: ReactNode }) {
   const [page, setPage] = useState<Page>('home');
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [shopCategory, setShopCategory] = useState<string | null>(null);
   const [shopSubCategory, setShopSubCategory] = useState<string | null>(null);
 
@@ -33,7 +30,7 @@ export function NavProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <NavContext.Provider value={{ page, navigate, selectedProductId, isLoggedIn, setIsLoggedIn, shopCategory, shopSubCategory, setShopFilter }}>
+    <NavContext.Provider value={{ page, navigate, selectedProductId, shopCategory, shopSubCategory, setShopFilter }}>
       {children}
     </NavContext.Provider>
   );

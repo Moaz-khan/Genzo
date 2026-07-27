@@ -4,29 +4,16 @@
 // Returns all orders for a user with their items
 
 import { query } from '../_db.js';
-import jwt from 'jsonwebtoken';
+import { requireUser, setCors } from '../_auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
-
-function verifyToken(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  try {
-    return jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-  } catch {
-    return null;
-  }
-}
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCors(res, 'GET, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const decoded = verifyToken(req);
+  const decoded = await requireUser(req, res);
   if (!decoded) {
     return res.status(401).json({ error: 'Unauthorized' });
   }

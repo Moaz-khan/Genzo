@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { products } from '../data/products';
 import ProductCard from '../components/ProductCard';
 import { useNav } from '../context/NavContext';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function ProductDetailPage() {
   const { selectedProductId, navigate } = useNav();
   const { addToCart, wishlistIds, toggleWishlist } = useCart();
+  const { user } = useAuth();
 
   const product = products.find(p => p.id === selectedProductId) ?? products[0];
   const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
@@ -28,6 +30,13 @@ export default function ProductDetailPage() {
   const [newReviewText, setNewReviewText] = useState('');
   const [newReviewName, setNewReviewName] = useState('');
 
+  useEffect(() => {
+    fetch(`/api/reviews/${product.id}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (data?.reviews) setReviews(data.reviews); })
+      .catch(() => undefined);
+  }, [product.id]);
+
   const isWishlisted = wishlistIds.includes(product.id);
 
   const handleAddToCart = () => {
@@ -48,22 +57,18 @@ export default function ProductDetailPage() {
     ? Math.round((1 - product.price / product.comparePrice) * 100)
     : null;
 
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newReviewName.trim() || !newReviewText.trim()) return;
-
-    const newReview = {
-      name: newReviewName,
-      rating: newReviewRating,
-      text: newReviewText,
-      date: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    };
-
-    setReviews([newReview, ...reviews]);
-    setShowReviewForm(false);
-    setNewReviewName('');
-    setNewReviewText('');
-    setNewReviewRating(5);
+    if (!user?.token) { window.alert('Please log in to write a review.'); return; }
+    if (!newReviewText.trim()) return;
+    try {
+      const response = await fetch(`/api/reviews/${product.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` }, body: JSON.stringify({ rating: newReviewRating, text: newReviewText }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not submit review');
+      const refreshed = await fetch(`/api/reviews/${product.id}`).then(result => result.json());
+      setReviews(refreshed.reviews || reviews);
+      setShowReviewForm(false); setNewReviewName(''); setNewReviewText(''); setNewReviewRating(5);
+    } catch (error) { window.alert(error instanceof Error ? error.message : 'Could not submit review'); }
   };
 
   return (
@@ -117,7 +122,7 @@ export default function ProductDetailPage() {
 
           {/* Right: Details */}
           <div>
-            <p className="text-[10px] font-sans tracking-widest text-text-muted uppercase mb-2 capitalize">
+            <p className="text-[10px] font-sans tracking-widest text-text-muted uppercase mb-2">
               {product.category}
             </p>
             <h1 className="font-serif text-3xl sm:text-4xl text-charcoal mb-4 leading-tight">
@@ -174,7 +179,7 @@ export default function ProductDetailPage() {
                     <button
                       key={size}
                       onClick={() => setSelectedSize(size)}
-                      className={`min-w-[44px] py-2 px-3 rounded-lg border text-sm font-sans transition-all ${selectedSize === size
+                      className={`min-w-11 py-2 px-3 rounded-lg border text-sm font-sans transition-all ${selectedSize === size
                           ? 'border-gold bg-gold/10 text-gold font-semibold'
                           : 'border-warm-border text-text-base hover:border-gold'
                         }`}
@@ -353,7 +358,7 @@ export default function ProductDetailPage() {
                         required
                         value={newReviewText}
                         onChange={(e) => setNewReviewText(e.target.value)}
-                        className="w-full px-4 py-2 bg-white border border-warm-border rounded-lg text-sm font-sans focus:outline-none focus:border-gold min-h-[100px] resize-y"
+                        className="w-full px-4 py-2 bg-white border border-warm-border rounded-lg text-sm font-sans focus:outline-none focus:border-gold min-h-25 resize-y"
                         placeholder="What did you like about this product?"
                       ></textarea>
                     </div>

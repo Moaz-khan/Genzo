@@ -6,7 +6,7 @@
 import { query } from '../_db.js';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

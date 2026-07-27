@@ -33,20 +33,24 @@ const panelContent: Record<ViewState, { image: string; title: string; subtitle: 
 };
 
 export default function LoginPage() {
-  const { navigate, setIsLoggedIn } = useNav();
+  const { navigate } = useNav();
   const { loginWithEmail, signupWithEmail, loginWithGoogle, continueAsGuest } = useAuth();
   const [view, setView] = useState<ViewState>('login');
 
   /* Form states */
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signupForm, setSignupForm] = useState({ firstName: '', lastName: '', email: '', password: '' });
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   /* Email Login handler */
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await loginWithEmail(loginForm.email, loginForm.password);
-    setIsLoggedIn(true);
     navigate('home');
   };
 
@@ -54,14 +58,12 @@ export default function LoginPage() {
   const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await signupWithEmail(signupForm.firstName, signupForm.lastName, signupForm.email, signupForm.password);
-    setIsLoggedIn(true);
     navigate('home');
   };
 
   /* Google OAuth Login handler */
   const handleGoogleLogin = async () => {
     const session = await loginWithGoogle();
-    setIsLoggedIn(true);
     setStatusMsg(`Logged in via Google as ${session.name} (${session.email})`);
     setTimeout(() => {
       navigate('home');
@@ -71,7 +73,6 @@ export default function LoginPage() {
   /* Guest User handler */
   const handleGuestLogin = async () => {
     const session = await continueAsGuest();
-    setIsLoggedIn(true);
     setStatusMsg(`Continuing as ${session.userId}. Fill shipping details at checkout!`);
     setTimeout(() => {
       navigate('home');
@@ -301,13 +302,35 @@ export default function LoginPage() {
                 <h1 className="text-4xl sm:text-5xl font-bold mb-3 tracking-tight">Reset Password</h1>
                 <p className="text-gray-500 mb-8 text-lg">Enter your email to receive an OTP</p>
 
-                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); setView('forgot-otp'); }}>
+                <form className="space-y-5" onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!forgotEmail) return;
+                  setForgotLoading(true);
+                  setStatusMsg(null);
+                  try {
+                    const response = await fetch('/api/auth/forgot-password', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: forgotEmail }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(data.error || 'Could not send OTP');
+                    setStatusMsg('Verification code sent to your email!');
+                    setView('forgot-otp');
+                  } catch (error) {
+                    setStatusMsg(error instanceof Error ? error.message : 'Could not send OTP');
+                  } finally {
+                    setForgotLoading(false);
+                  }
+                }}>
                   <div>
-                    <input type="email" placeholder="Email address" required className="w-full px-5 py-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
+                    <input type="email" placeholder="Email address" required value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      className="w-full px-5 py-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
                   </div>
                   <div className="pt-4 pb-2">
-                    <button type="submit" className="w-full py-4 rounded-xl bg-[#E8392A] hover:bg-[#c42d20] text-white font-bold text-lg shadow-[0_8px_20px_-6px_rgba(232,57,42,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(232,57,42,0.5)] transition-all transform hover:-translate-y-0.5">
-                      Send OTP
+                    <button type="submit" disabled={forgotLoading}
+                      className="w-full py-4 rounded-xl bg-[#E8392A] hover:bg-[#c42d20] text-white font-bold text-lg shadow-[0_8px_20px_-6px_rgba(232,57,42,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(232,57,42,0.5)] transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {forgotLoading ? 'Sending...' : 'Send OTP'}
                     </button>
                   </div>
                 </form>
@@ -323,19 +346,52 @@ export default function LoginPage() {
                 <h1 className="text-4xl sm:text-5xl font-bold mb-3 tracking-tight">Enter OTP</h1>
                 <p className="text-gray-500 mb-8 text-lg">We sent a secure code to your email.</p>
 
-                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); setView('forgot-reset'); }}>
+                <form className="space-y-5" onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!forgotOtp || forgotOtp.length !== 6) return;
+                  setForgotLoading(true);
+                  setStatusMsg(null);
+                  try {
+                    const response = await fetch('/api/auth/forgot-password', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: forgotEmail, otp: forgotOtp }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(data.error || 'Invalid code');
+                    setStatusMsg('Code verified! Set a new password.');
+                    setView('forgot-reset');
+                  } catch (error) {
+                    setStatusMsg(error instanceof Error ? error.message : 'Invalid code');
+                  } finally {
+                    setForgotLoading(false);
+                  }
+                }}>
                   <div>
-                    <input type="text" placeholder="6-digit OTP" required maxLength={6} pattern="\d{6}" className="w-full px-5 py-4 text-center tracking-[0.5em] text-2xl rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
+                    <input type="text" placeholder="6-digit OTP" required maxLength={6} pattern="\d{6}"
+                      value={forgotOtp}
+                      onChange={e => setForgotOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="w-full px-5 py-4 text-center tracking-[0.5em] text-2xl rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
                   </div>
                   <div className="pt-4 pb-2">
-                    <button type="submit" className="w-full py-4 rounded-xl bg-[#E8392A] hover:bg-[#c42d20] text-white font-bold text-lg shadow-[0_8px_20px_-6px_rgba(232,57,42,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(232,57,42,0.5)] transition-all transform hover:-translate-y-0.5">
-                      Verify OTP
+                    <button type="submit" disabled={forgotLoading}
+                      className="w-full py-4 rounded-xl bg-[#E8392A] hover:bg-[#c42d20] text-white font-bold text-lg shadow-[0_8px_20px_-6px_rgba(232,57,42,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(232,57,42,0.5)] transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {forgotLoading ? 'Verifying...' : 'Verify OTP'}
                     </button>
                   </div>
                 </form>
 
                 <p className="text-center text-gray-500 mt-8 font-medium">
-                  Didn't receive code? <button type="button" className="text-[#E8392A] hover:text-[#c42d20] font-semibold transition-colors">Resend</button>
+                  Didn't receive code? <button type="button" onClick={async () => {
+                    setForgotLoading(true);
+                    try {
+                      await fetch('/api/auth/forgot-password', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: forgotEmail }),
+                      });
+                      setStatusMsg('New code sent to your email!');
+                    } catch { setStatusMsg('Could not resend code. Please try again.'); }
+                    finally { setForgotLoading(false); }
+                  }} className="text-[#E8392A] hover:text-[#c42d20] font-semibold transition-colors">Resend</button>
                 </p>
               </div>
             )}
@@ -345,16 +401,50 @@ export default function LoginPage() {
                 <h1 className="text-4xl sm:text-5xl font-bold mb-3 tracking-tight">New Password</h1>
                 <p className="text-gray-500 mb-8 text-lg">Create a new secure password.</p>
 
-                <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); setView('login'); }}>
+                <form className="space-y-5" onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (forgotNewPassword !== forgotConfirmPassword) {
+                    setStatusMsg('Passwords do not match.');
+                    return;
+                  }
+                  if (forgotNewPassword.length < 8) {
+                    setStatusMsg('Password must be at least 8 characters.');
+                    return;
+                  }
+                  setForgotLoading(true);
+                  setStatusMsg(null);
+                  try {
+                    const response = await fetch('/api/auth/reset-password', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: forgotEmail, otp: forgotOtp, newPassword: forgotNewPassword }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(data.error || 'Could not reset password');
+                    setStatusMsg('Password reset successful! Please log in with your new password.');
+                    setView('login');
+                    setForgotOtp('');
+                    setForgotNewPassword('');
+                    setForgotConfirmPassword('');
+                  } catch (error) {
+                    setStatusMsg(error instanceof Error ? error.message : 'Could not reset password');
+                  } finally {
+                    setForgotLoading(false);
+                  }
+                }}>
                   <div>
-                    <input type="password" placeholder="New Password" required className="w-full px-5 py-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
+                    <input type="password" placeholder="New Password" required value={forgotNewPassword}
+                      onChange={e => setForgotNewPassword(e.target.value)}
+                      className="w-full px-5 py-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
                   </div>
                   <div>
-                    <input type="password" placeholder="Confirm Password" required className="w-full px-5 py-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
+                    <input type="password" placeholder="Confirm Password" required value={forgotConfirmPassword}
+                      onChange={e => setForgotConfirmPassword(e.target.value)}
+                      className="w-full px-5 py-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#E8392A] transition-all bg-gray-50/50" />
                   </div>
                   <div className="pt-4 pb-2">
-                    <button type="submit" className="w-full py-4 rounded-xl bg-[#E8392A] hover:bg-[#c42d20] text-white font-bold text-lg shadow-[0_8px_20px_-6px_rgba(232,57,42,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(232,57,42,0.5)] transition-all transform hover:-translate-y-0.5">
-                      Save & Login
+                    <button type="submit" disabled={forgotLoading}
+                      className="w-full py-4 rounded-xl bg-[#E8392A] hover:bg-[#c42d20] text-white font-bold text-lg shadow-[0_8px_20px_-6px_rgba(232,57,42,0.4)] hover:shadow-[0_12px_24px_-6px_rgba(232,57,42,0.5)] transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                      {forgotLoading ? 'Saving...' : 'Save & Login'}
                     </button>
                   </div>
                 </form>

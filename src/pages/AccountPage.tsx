@@ -30,7 +30,7 @@ type Section = 'orders' | 'wishlist' | 'addresses' | 'profile' | 'password';
 
 export default function AccountPage() {
   const { wishlistIds, placedOrders } = useCart();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshSession } = useAuth();
   const { navigate } = useNav();
   const [section, setSection] = useState<Section>('orders');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -40,6 +40,7 @@ export default function AccountPage() {
   const [editingAddress, setEditingAddress] = useState<number | null>(null);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [message, setMessage] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const request = async (path: string, options: RequestInit = {}) => {
     const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token}`, ...(options.headers || {}) } });
@@ -58,8 +59,14 @@ export default function AccountPage() {
   }, [user?.token]);
 
   const saveProfile = async () => {
-    try { await request('/api/account/profile', { method: 'PATCH', body: JSON.stringify(profile) }); setMessage('Profile saved.'); }
+    setProfileLoading(true);
+    try {
+      await request('/api/account/profile', { method: 'PATCH', body: JSON.stringify(profile) });
+      setMessage('Profile saved.');
+      await refreshSession();
+    }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save profile'); }
+    finally { setProfileLoading(false); }
   };
 
   const saveAddress = async () => {
@@ -105,10 +112,10 @@ export default function AccountPage() {
               {/* User avatar */}
               <div className="p-5 border-b border-warm-border">
                 <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center mb-2">
-                  <span className="font-serif text-gold text-lg font-bold">A</span>
+                  <span className="font-serif text-gold text-lg font-bold">{(user?.name?.[0] || user?.email?.[0] || 'G').toUpperCase()}</span>
                 </div>
-                <p className="font-sans font-semibold text-sm text-charcoal">{user?.name}</p>
-                <p className="font-sans text-xs text-text-muted">{user?.email || 'Guest account'}</p>
+                <p className="font-sans font-semibold text-sm text-charcoal">{user?.name || 'Guest User'}</p>
+                <p className="font-sans text-xs text-text-muted">{user?.email || `Guest account (${user?.userId || ''})`}</p>
               </div>
               <nav className="py-2">
                 {sidebarLinks.map(link => (
@@ -367,8 +374,8 @@ export default function AccountPage() {
                       </div>
                     ))}
                   </div>
-                  <button onClick={saveProfile} className="mt-5 px-6 py-2.5 bg-gold text-charcoal font-sans font-semibold text-sm rounded-lg hover:bg-gold-dark transition-colors">
-                    Save Changes
+                  <button onClick={saveProfile} disabled={profileLoading} className="mt-5 px-6 py-2.5 bg-gold text-charcoal font-sans font-semibold text-sm rounded-lg hover:bg-gold-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    {profileLoading ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               </div>

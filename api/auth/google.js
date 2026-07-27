@@ -8,7 +8,7 @@
 import { query } from '../_db.js';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { name, email, googleId, avatarUrl } = req.body;
+    const { name, email, googleId, avatarUrl, guestUserId, guestToken } = req.body;
 
     if (!email || !name) {
       return res.status(400).json({ error: 'Name and email from Google are required' });
@@ -28,6 +28,11 @@ export default async function handler(req, res) {
     // Check if user exists
     const existing = await query('SELECT user_id, name, email, auth_provider FROM users WHERE email = ?', [email]);
 
+    await query(`CREATE TABLE IF NOT EXISTS user_profiles (user_id VARCHAR(80) PRIMARY KEY, phone VARCHAR(40), avatar_url TEXT, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)`);
+    try { await query('ALTER TABLE user_profiles ADD COLUMN avatar_url TEXT NULL'); } catch (error) {
+      if (!String(error?.message || '').toLowerCase().includes('duplicate')) throw error;
+    }
+
     let userId;
 
     if (existing.length > 0) {
@@ -35,18 +40,22 @@ export default async function handler(req, res) {
       userId = existing[0].user_id;
 
       // Update avatar if changed
-      if (avatarUrl) {
-        await query('UPDATE users SET avatar_url = ? WHERE user_id = ?', [avatarUrl, userId]);
-      }
+      if (avatarUrl) await query('INSERT INTO user_profiles (user_id, avatar_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE avatar_url = VALUES(avatar_url)', [userId, avatarUrl]);
     } else {
       // Create new Google user
       userId = `goog_${googleId || Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      if (guestUserId && guestToken) {
+        try {
+          const guest = jwt.verify(guestToken, JWT_SECRET);
+          const guestRows = guest.userId === guestUserId && guest.provider === 'guest'
+            ? await query('SELECT user_id FROM users WHERE user_id = ? AND auth_provider = \'guest\'', [guestUserId]) : [];
+          if (guestRows.length) userId = guestUserId;
+        } catch { /* use a new Google user when guest token is invalid */ }
+      }
 
-      await query(
-        `INSERT INTO users (user_id, name, email, auth_provider, avatar_url)
-         VALUES (?, ?, ?, 'google', ?)`,
-        [userId, name, email, avatarUrl || null]
-      );
+      if (userId === guestUserId) await query(`UPDATE users SET name = ?, email = ?, auth_provider = 'google' WHERE user_id = ?`, [name, email, userId]);
+      else await query(`INSERT INTO users (user_id, name, email, auth_provider) VALUES (?, ?, ?, 'google')`, [userId, name, email]);
+      if (avatarUrl) await query('INSERT INTO user_profiles (user_id, avatar_url) VALUES (?, ?) ON DUPLICATE KEY UPDATE avatar_url = VALUES(avatar_url)', [userId, avatarUrl]);
     }
 
     // Generate JWT
@@ -62,7 +71,8 @@ export default async function handler(req, res) {
       .replace('T', ' ');
 
     await query(
-      `INSERT INTO user_tokens (user_id, token, expires_at) VALUES (?, ?, ?)`,
+      `INSERT INTO user_tokens (user_id, token, expires_at) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at)`,
       [userId, token, expiresAt]
     );
 

@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   setCors(res, 'POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const user = requireUser(req, res);
+  const user = await requireUser(req, res);
   if (!user) return;
   if (user.provider === 'guest') return res.status(403).json({ error: 'Guest accounts do not have passwords' });
 

@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   setCors(res, 'GET, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
-  const user = requireUser(req, res);
+  const user = await requireUser(req, res);
   if (!user) return;
   try {
     // Keep this endpoint compatible with wishlists created before product

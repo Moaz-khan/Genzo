@@ -7,7 +7,7 @@ import { query } from '../_db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export default async function handler(req, res) {
   // CORS headers
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { firstName, lastName, email, password } = req.body;
+    const { firstName, lastName, email, password, guestUserId, guestToken } = req.body;
 
     if (!email || !password || !firstName) {
       return res.status(400).json({ error: 'First name, email, and password are required' });
@@ -34,16 +34,26 @@ export default async function handler(req, res) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Generate unique user ID
-    const userId = `usr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    let userId = `usr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     const name = `${firstName} ${lastName || ''}`.trim();
 
+    // Claim the current guest account only when its signed token proves ownership.
+    if (guestUserId && guestToken) {
+      try {
+        const guest = jwt.verify(guestToken, JWT_SECRET);
+        if (guest.userId === guestUserId && guest.provider === 'guest') {
+          const guestRows = await query('SELECT user_id FROM users WHERE user_id = ? AND auth_provider = \'guest\'', [guestUserId]);
+          if (guestRows.length) userId = guestUserId;
+        }
+      } catch { /* create a normal account when the guest token is invalid */ }
+    }
+
     // Insert user
-    await query(
-      `INSERT INTO users (user_id, name, email, password_hash, auth_provider)
-       VALUES (?, ?, ?, ?, 'local')`,
-      [userId, name, email, passwordHash]
-    );
+    if (userId === guestUserId) {
+      await query(`UPDATE users SET name = ?, email = ?, password_hash = ?, auth_provider = 'local' WHERE user_id = ?`, [name, email, passwordHash, userId]);
+    } else {
+      await query(`INSERT INTO users (user_id, name, email, password_hash, auth_provider) VALUES (?, ?, ?, ?, 'local')`, [userId, name, email, passwordHash]);
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -59,7 +69,8 @@ export default async function handler(req, res) {
       .replace('T', ' ');
 
     await query(
-      `INSERT INTO user_tokens (user_id, token, expires_at) VALUES (?, ?, ?)`,
+      `INSERT INTO user_tokens (user_id, token, expires_at) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at)`,
       [userId, token, expiresAt]
     );
 

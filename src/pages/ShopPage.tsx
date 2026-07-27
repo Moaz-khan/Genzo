@@ -106,6 +106,7 @@ export default function ShopPage() {
   const [showInStockOnly, setShowInStockOnly] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const ITEMS_PER_PAGE = 8;
 
@@ -115,8 +116,34 @@ export default function ShopPage() {
     setPage(1);
   }, [shopCategory, shopSubCategory]);
 
+  // Listen for search events from Navbar
+  useEffect(() => {
+    const handler = (e: CustomEvent) => {
+      const query = String(e.detail || '').trim();
+      if (query) {
+        setSearchQuery(query);
+        setSelectedCategory('all');
+        setSelectedSubCategory(null);
+        setShopFilter(null, null);
+        setPage(1);
+      }
+    };
+    window.addEventListener('shop-search', handler as EventListener);
+    return () => window.removeEventListener('shop-search', handler as EventListener);
+  }, [setShopFilter]);
+
   const filtered = useMemo(() => {
     let result = [...products];
+
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
+      );
+    }
 
     if (selectedCategory !== 'all') {
       const catMapping: Record<string, string> = {

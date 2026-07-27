@@ -2,11 +2,14 @@ import { query } from '../_db.js';
 import { requireUser, setCors } from '../_auth.js';
 
 export default async function handler(req, res) {
+    try { await query('ALTER TABLE user_profiles ADD COLUMN avatar_url TEXT NULL'); } catch (error) {
+      if (!String(error?.message || '').toLowerCase().includes('duplicate')) throw error;
+    }
   setCors(res, 'GET, PATCH, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (!['GET', 'PATCH'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed' });
 
-  const user = requireUser(req, res);
+  const user = await requireUser(req, res);
   if (!user) return;
 
   try {
@@ -17,6 +20,7 @@ export default async function handler(req, res) {
       `CREATE TABLE IF NOT EXISTS user_profiles (
         user_id VARCHAR(80) PRIMARY KEY,
         phone VARCHAR(40),
+        avatar_url TEXT,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )`
     );
@@ -24,7 +28,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const rows = await query(
         `SELECT u.user_id AS userId, u.name, u.email, u.auth_provider AS authProvider,
-                p.phone, NULL AS avatarUrl
+                p.phone, p.avatar_url AS avatarUrl
          FROM users u LEFT JOIN user_profiles p ON p.user_id = u.user_id
          WHERE u.user_id = ?`, [user.userId]
       );
@@ -45,7 +49,7 @@ export default async function handler(req, res) {
     );
     const rows = await query(
       `SELECT u.user_id AS userId, u.name, u.email, u.auth_provider AS authProvider,
-              p.phone, NULL AS avatarUrl
+              p.phone, p.avatar_url AS avatarUrl
        FROM users u LEFT JOIN user_profiles p ON p.user_id = u.user_id
        WHERE u.user_id = ?`, [user.userId]
     );

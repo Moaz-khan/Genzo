@@ -5,50 +5,47 @@
 // Saves full order + all items to TiDB
 
 import { query } from '../_db.js';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_change_me';
-
-function verifyToken(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  try {
-    return jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-  } catch {
-    return null;
-  }
-}
+import { requireUser, setCors } from '../_auth.js';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCors(res, 'POST, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const decoded = verifyToken(req);
+  const decoded = await requireUser(req, res);
   if (!decoded) {
     return res.status(401).json({ error: 'Unauthorized. Please log in or continue as guest.' });
   }
 
   try {
-    const {
-      orderNumber,
-      shippingInfo,       // { firstName, lastName, email, phone, address, city, province, postalCode, notes }
-      paymentMethod,
-      items,              // [{ productId, name, image, size, price, quantity }]
-      subtotal,
-      shippingFee,
-      total,
-    } = req.body;
+    const { orderNumber, shippingInfo, paymentMethod } = req.body;
+    const allowedPayments = new Set(['cod', 'jazzcash', 'easypaisa', 'bank', 'card']);
+    if (!allowedPayments.has(paymentMethod)) return res.status(400).json({ error: 'Unsupported payment method' });
+    if (!orderNumber || !/^GZ-[0-9]{6}$/.test(orderNumber) || !shippingInfo?.address || !shippingInfo?.city || !shippingInfo?.province) {
+      return res.status(400).json({ error: 'Shipping and order details are incomplete' });
+    }
 
-    if (!orderNumber || !items || items.length === 0) {
+    const storedItems = await query(
+      `SELECT product_id AS productId, product_name AS name, image_url AS image, size, price, quantity
+       FROM cart_items WHERE user_id = ?`, [decoded.userId]
+    );
+    const items = storedItems.map(item => ({ ...item, productId: Number(item.productId), price: Number(item.price), quantity: Number(item.quantity) }));
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const shippingFee = subtotal >= 5000 ? 0 : 250;
+    const total = subtotal + shippingFee;
+
+    if (!items.length) {
       return res.status(400).json({ error: 'Order details are incomplete' });
     }
 
     const userId = decoded.userId;
-    const shippingAddress = `${shippingInfo.address}, ${shippingInfo.notes || ''}`.trim();
+    const addressLines = [shippingInfo.address];
+    if (shippingInfo.city) addressLines.push(shippingInfo.city);
+    if (shippingInfo.province) addressLines.push(shippingInfo.province);
+    if (shippingInfo.postalCode) addressLines.push(shippingInfo.postalCode);
+    let shippingAddress = addressLines.join(', ');
+    if (shippingInfo.notes) shippingAddress += ` (Notes: ${shippingInfo.notes})`;
 
     // Insert order
     await query(
@@ -91,6 +88,8 @@ export default async function handler(req, res) {
         ]
       );
     }
+
+    await query('DELETE FROM cart_items WHERE user_id = ?', [userId]);
 
     return res.status(201).json({
       success: true,

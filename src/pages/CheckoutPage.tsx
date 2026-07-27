@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useNav } from '../context/NavContext';
 import { useAuth } from '../context/AuthContext';
 
 type Step = 'shipping' | 'payment' | 'review';
+type SavedAddress = { id: number; recipientName: string; phone?: string; address: string; city: string; province: string; postalCode?: string };
+type SavedPaymentMethod = { id: number; methodType: string; brand?: string; last4: string; label?: string; isDefault: boolean };
 
 const paymentMethods = [
   { id: 'cod',       label: 'Cash on Delivery', description: 'Pay when your order arrives',        icon: '💵' },
@@ -51,6 +53,10 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<Step>('shipping');
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<SavedPaymentMethod[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('new');
+  const [selectedPaymentId, setSelectedPaymentId] = useState('new');
   const proofRef = useRef<HTMLInputElement>(null);
 
   /* Card fields */
@@ -79,6 +85,24 @@ export default function CheckoutPage() {
   const shipping = cartTotal >= 5000 ? 0 : 250;
   const total = cartTotal + shipping;
 
+  useEffect(() => {
+    if (!user?.token) return;
+    const headers = { Authorization: `Bearer ${user.token}` };
+    fetch('/api/account/addresses', { headers }).then(response => response.ok ? response.json() : null)
+      .then(data => { if (data?.addresses) setSavedAddresses(data.addresses); }).catch(() => undefined);
+    fetch('/api/account/payment-methods', { headers }).then(response => response.ok ? response.json() : null)
+      .then(data => { if (data?.methods) setSavedPaymentMethods(data.methods); }).catch(() => undefined);
+  }, [user?.token]);
+
+  const selectAddress = (value: string) => {
+    setSelectedAddressId(value);
+    if (value === 'new') return;
+    const address = savedAddresses.find(item => String(item.id) === value);
+    if (!address) return;
+    const nameParts = address.recipientName.trim().split(/\s+/);
+    setForm(previous => ({ ...previous, firstName: nameParts[0] || '', lastName: nameParts.slice(1).join(' '), phone: address.phone || '', address: address.address, city: address.city, province: address.province, postalCode: address.postalCode || '' }));
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   };
@@ -95,6 +119,7 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!user?.token || placingOrder) return;
+    if (needsProof && !proofFile) { window.alert('Please upload your payment screenshot first.'); return; }
 
     const orderNumber = `GZ-${Math.floor(100000 + Math.random() * 900000)}`;
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -121,14 +146,25 @@ export default function CheckoutPage() {
           orderNumber,
           shippingInfo: form,
           paymentMethod,
-          items: cartItems,
-          subtotal: cartTotal,
-          shippingFee: shipping,
-          total,
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not save the order.');
+
+      if (proofFile) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error('Could not read payment proof'));
+          reader.readAsDataURL(proofFile);
+        });
+        const proofResponse = await fetch(`/api/orders/${orderNumber}/payment-proof`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+          body: JSON.stringify({ fileName: proofFile.name, mimeType: proofFile.type, dataUrl }),
+        });
+        const proofData = await proofResponse.json().catch(() => ({}));
+        if (!proofResponse.ok) throw new Error(proofData.error || 'Could not upload payment proof');
+      }
 
       setLastOrder(newOrder);
       addPlacedOrder(newOrder);
@@ -192,6 +228,15 @@ export default function CheckoutPage() {
                     </span>
                   )}
                 </div>
+                {savedAddresses.length > 0 && (
+                  <div className="mb-6 rounded-xl border border-gold/30 bg-gold/5 p-4">
+                    <label className="block text-xs font-sans font-semibold text-charcoal mb-2 uppercase tracking-wide">Select saved address</label>
+                    <select value={selectedAddressId} onChange={event => selectAddress(event.target.value)} className="w-full px-4 py-2.5 border border-warm-border rounded-lg text-sm bg-white">
+                      <option value="new">Enter a new address</option>
+                      {savedAddresses.map(address => <option key={address.id} value={address.id}>{address.recipientName} — {address.address}, {address.city}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
                     { name: 'firstName', label: 'First Name',     type: 'text',  placeholder: 'Ayesha'        },
@@ -269,6 +314,17 @@ export default function CheckoutPage() {
             {step === 'payment' && (
               <div className="bg-white rounded-xl border border-warm-border p-6 space-y-6">
                 <h2 className="font-serif text-xl text-charcoal">Payment Method</h2>
+
+                {savedPaymentMethods.length > 0 && (
+                  <div className="rounded-xl border border-gold/30 bg-gold/5 p-4">
+                    <label className="block text-xs font-sans font-semibold text-charcoal mb-2 uppercase tracking-wide">Choose saved payment method</label>
+                    <select value={selectedPaymentId} onChange={event => { setSelectedPaymentId(event.target.value); if (event.target.value !== 'new') setPaymentMethod('card'); }} className="w-full px-4 py-2.5 border border-warm-border rounded-lg text-sm bg-white">
+                      <option value="new">Use a new payment method</option>
+                      {savedPaymentMethods.map(method => <option key={method.id} value={method.id}>{method.label || `${method.brand || 'Card'} ending in ${method.last4}`}</option>)}
+                    </select>
+                    <p className="text-[10px] text-text-muted mt-2">Only provider-tokenized cards are saved. Full card number and CVC are never stored.</p>
+                  </div>
+                )}
 
                 {/* Method selector */}
                 <div className="space-y-3">
@@ -388,8 +444,8 @@ export default function CheckoutPage() {
                     </div>
 
                     {/* Visual card preview */}
-                    <div className="bg-gradient-to-br from-charcoal to-[#2d2412] px-5 py-5 flex justify-center">
-                      <div className="w-full max-w-xs rounded-2xl bg-gradient-to-br from-[#C9A44C] via-[#b8922e] to-[#8a6a1f] p-5 shadow-xl relative overflow-hidden">
+                    <div className="bg-linear-to-br from-charcoal to-[#2d2412] px-5 py-5 flex justify-center">
+                      <div className="w-full max-w-xs rounded-2xl bg-linear-to-br from-gold via-[#b8922e] to-[#8a6a1f] p-5 shadow-xl relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
                         <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
                         <div className="relative z-10">

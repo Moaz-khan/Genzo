@@ -199,8 +199,23 @@ export default function Navbar() {
           <div className="max-w-lg mx-auto relative">
             <input
               type="text"
+              id="nav-search-input"
               placeholder="Search for rings, necklaces, bracelets..."
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const query = (e.target as HTMLInputElement).value.trim();
+                  if (query) {
+                    setSearchOpen(false);
+                    setShopFilter(null, null);
+                    navigate('shop');
+                    setTimeout(() => {
+                      const event = new CustomEvent('shop-search', { detail: query });
+                      window.dispatchEvent(event);
+                    }, 100);
+                  }
+                }
+              }}
               className="w-full px-4 py-2 pr-10 border border-warm-border rounded-lg text-sm font-sans bg-white text-text-base"
             />
             <svg className="absolute right-3 top-2.5 text-text-muted" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

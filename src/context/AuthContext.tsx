@@ -18,6 +18,8 @@ interface AuthContextType {
   signupWithEmail: (firstName: string, lastName: string, email: string, pass: string) => Promise<boolean>;
   loginWithGoogle: () => Promise<UserSession>;
   continueAsGuest: () => Promise<UserSession>;
+  ensureGuest: () => Promise<UserSession>;
+  refreshSession: () => Promise<void>;
   logout: () => void;
 }
 
@@ -45,6 +47,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  // Validate session on mount — clear expired tokens
+  useEffect(() => {
+    if (!user?.token) return;
+    fetch(`${API_URL}/api/auth/session`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+    }).then(response => {
+      if (!response.ok) throw new Error('Session expired');
+    }).catch(() => {
+      setUser(null);
+      localStorage.removeItem('sanisilver_user_session');
+    });
+  }, []); // Only run on mount
+
   useEffect(() => {
     if (user) {
       localStorage.setItem('sanisilver_user_session', JSON.stringify(user));
@@ -56,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* Login with Email & Password */
   const loginWithEmail = async (email: string, password: string): Promise<boolean> => {
     const data = await apiRequest<{ user: Omit<UserSession, 'token'>; token: string }>('/api/auth/login', {
-      method: 'POST', body: JSON.stringify({ email, password }),
+      method: 'POST', body: JSON.stringify({ email, password, guestUserId: user?.authProvider === 'guest' ? user.userId : undefined, guestToken: user?.authProvider === 'guest' ? user.token : undefined }),
     });
     const session: UserSession = { ...data.user, token: data.token };
     setUser(session);
@@ -66,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* Sign up with Email & Password */
   const signupWithEmail = async (firstName: string, lastName: string, email: string, password: string): Promise<boolean> => {
     const data = await apiRequest<{ user: Omit<UserSession, 'token'>; token: string }>('/api/auth/signup', {
-      method: 'POST', body: JSON.stringify({ firstName, lastName, email, password }),
+      method: 'POST', body: JSON.stringify({ firstName, lastName, email, password, guestUserId: user?.authProvider === 'guest' ? user.userId : undefined, guestToken: user?.authProvider === 'guest' ? user.token : undefined }),
     });
     const session: UserSession = { ...data.user, token: data.token };
     setUser(session);
@@ -82,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${randomName}`;
     const data = await apiRequest<{ user: Omit<UserSession, 'token'>; token: string }>('/api/auth/google', {
-      method: 'POST', body: JSON.stringify({ name: randomName, email: randomEmail, googleId: userId, avatarUrl }),
+      method: 'POST', body: JSON.stringify({ name: randomName, email: randomEmail, googleId: userId, avatarUrl, guestUserId: user?.authProvider === 'guest' ? user.userId : undefined, guestToken: user?.authProvider === 'guest' ? user.token : undefined }),
     });
     const session: UserSession = { ...data.user, token: data.token };
 
@@ -101,7 +116,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return session;
   };
 
+  const ensureGuest = async (): Promise<UserSession> => {
+    if (user) return user;
+    return continueAsGuest();
+  };
+
+  const refreshSession = async (): Promise<void> => {
+    if (!user?.token) return;
+    try {
+      const data = await apiRequest<{ user: Omit<UserSession, 'token'> }>('/api/auth/session', {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      const updated: UserSession = { ...data.user, token: user.token };
+      setUser(updated);
+    } catch {
+      // Session refresh failed — keep current user
+    }
+  };
+
   const logout = () => {
+    if (user?.token) {
+      void fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+    }
     setUser(null);
     localStorage.removeItem('sanisilver_user_session');
   };
@@ -116,6 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signupWithEmail,
       loginWithGoogle,
       continueAsGuest,
+      ensureGuest,
+      refreshSession,
       logout,
     }}>
       {children}
