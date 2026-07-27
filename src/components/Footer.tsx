@@ -1,11 +1,88 @@
+import { useState } from 'react';
 import { useNav } from '../context/NavContext';
 
 export default function Footer() {
   const { navigate } = useNav();
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [newsletterMsg, setNewsletterMsg] = useState('');
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) return;
+    setNewsletterStatus('loading');
+    try {
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newsletterEmail }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not subscribe');
+      setNewsletterStatus('success');
+      setNewsletterMsg('You\'re subscribed! Welcome to Genzo Silver.');
+      setNewsletterEmail('');
+    } catch (error) {
+      setNewsletterStatus('error');
+      setNewsletterMsg(error instanceof Error ? error.message : 'Something went wrong');
+    }
+  };
 
   return (
     <footer className="bg-charcoal text-ivory">
-
+      {/* Newsletter section */}
+      <div className="border-b border-ivory/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14">
+          <div className="max-w-2xl mx-auto text-center">
+            <p className="text-[10px] tracking-[0.4em] font-sans text-gold font-medium uppercase mb-3">Stay in the Loop</p>
+            <h3 className="font-serif text-2xl sm:text-3xl text-ivory mb-3">The Silver Lining</h3>
+            <p className="text-sm text-ivory/50 font-sans mb-6 max-w-md mx-auto leading-relaxed">
+              Be the first to know about new drops, exclusive collections, and special offers — delivered straight to your inbox.
+            </p>
+            <form onSubmit={handleNewsletterSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <div className="flex-1 relative">
+                <input
+                  type="email"
+                  required
+                  value={newsletterEmail}
+                  onChange={e => { setNewsletterEmail(e.target.value); if (newsletterStatus !== 'idle') { setNewsletterStatus('idle'); setNewsletterMsg(''); } }}
+                  placeholder="Your email address"
+                  disabled={newsletterStatus === 'loading'}
+                  className="w-full px-5 py-3 bg-ivory/5 border border-ivory/20 rounded-xl text-sm font-sans text-ivory placeholder-ivory/40 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 transition-all disabled:opacity-50"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={newsletterStatus === 'loading'}
+                className="px-6 py-3 bg-gold text-charcoal font-sans font-semibold text-sm rounded-xl hover:bg-gold-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {newsletterStatus === 'loading' ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Subscribing...
+                  </span>
+                ) : (
+                  'Subscribe'
+                )}
+              </button>
+            </form>
+            {newsletterStatus === 'success' && (
+              <p className="mt-3 text-xs font-sans text-green-400 font-medium flex items-center justify-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {newsletterMsg}
+              </p>
+            )}
+            {newsletterStatus === 'error' && (
+              <p className="mt-3 text-xs font-sans text-red-400 font-medium">{newsletterMsg}</p>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Main footer */}
       <div className="w-full px-4 sm:px-6 lg:px-8 py-14">
